@@ -1,0 +1,25 @@
+# inspired by rhinstaller/anaconda
+
+name: Trigger GitLab CI
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  trigger-gitlab:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      SCHUTZBOT_SSH_KEY: I_DONT_CARE
+      SKIP_CI: ${{ (github.event.pull_request.draft == true || contains(github.event.pull_request.labels.*.name, 'WIP')) && !contains(github.event.pull_request.labels.*.name, 'WIP+test') }}
+    steps:
+      - name: Report status
+        uses: haya14busa/action-workflow_run-status@v1
+
+      - name: Push to gitlab
+        run: |
+          [[ "${SKIP_CI}" == true ]] && PUSH_OPTION='-o ci.variable="SKIP_CI=true"' || PUSH_OPTION=""
+          echo "{$SKIP_CI}"
+          echo "{$PUSH_OPTION}"

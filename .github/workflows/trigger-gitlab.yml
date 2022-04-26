@@ -13,13 +13,39 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SCHUTZBOT_SSH_KEY: I_DONT_CARE
-      SKIP_CI: ${{ (github.event.pull_request.draft == true || contains(github.event.pull_request.labels.*.name, 'WIP')) && !contains(github.event.pull_request.labels.*.name, 'WIP+test') }}
+      SECRET: ${{ secrets.SECRET }}
     steps:
-      - name: Report status
-        uses: haya14busa/action-workflow_run-status@v1
+      - name: Download
+        uses: actions/github-script@v5
+        with:
+          script: |
+            let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: context.payload.workflow_run.id,
+            });
+            let matchArtifact = allArtifacts.data.artifacts.filter((artifact) => {
+              return artifact.name == "my-artifacts"
+            })[0];
+            let download = await github.rest.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+            let fs = require('fs');
+            fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/my-artifacts.zip`, Buffer.from(download.data));
 
-      - name: Push to gitlab
+      - name: 'Unzip artifact'
+        run: unzip my-artifacts.zip
+      - name: SKIP_CI?
         run: |
+          set -x
+          echo "${SECRET}"
+          SKIP_CI=$(cat SKIP_CI.txt)
           [[ "${SKIP_CI}" == true ]] && PUSH_OPTION='-o ci.variable="SKIP_CI=true"' || PUSH_OPTION=""
-          echo "{$SKIP_CI}"
-          echo "{$PUSH_OPTION}"
+          if [[ "${SKIP_CI}" == true ]];then
+            echo "DO SKIP CI"
+          else
+            echo "DO NOT SKIP CI"
+          fi
